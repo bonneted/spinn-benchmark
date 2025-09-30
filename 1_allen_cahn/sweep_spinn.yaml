@@ -1,13 +1,13 @@
 program: Allen_Cahn_HPO.py
-project: fourier_features_spinn 
+project: Allen-Cahn-SPINN 
 method: grid   # full factorial
 parameters:
   net_type:
-    values: ["SPINN"]
+    value: "SPINN"
   n_fourier_features:
     values: [128, 256]
   activations:
-    values: ["tanh", "sin", ["sin", "sin", "sin", "sin", "tanh"]]
+    values: ["tanh", "sin"]
   n_domain:
     values: [150**2, 200**2]
   n_iters:
@@ -17,4 +17,4 @@ parameters:
   rank:
     values: [32, 64]
   seed:
-    values: [0, 1, 2, 3, 4]   # ensures 5 runs with different initialization
+    values: [0, 1, 2, 3]   # ensures 4 runs with different initialization
