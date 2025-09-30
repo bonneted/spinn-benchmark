@@ -1,0 +1,20 @@
+program: Allen_Cahn_HPO.py
+project: fourier_features_spinn 
+method: grid   # full factorial
+parameters:
+  net_type:
+    values: ["SPINN"]
+  n_fourier_features:
+    values: [128, 256]
+  activations:
+    values: ["tanh", "sin", ["sin", "sin", "sin", "sin", "tanh"]]
+  n_domain:
+    values: [150**2, 200**2]
+  n_iters:
+    values: [20000, 30000]
+  mlp_type:
+    values: ["mlp", "modified-mlp"]
+  rank:
+    values: [32, 64]
+  seed:
+    values: [0, 1, 2, 3, 4]   # ensures 5 runs with different initialization
