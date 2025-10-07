@@ -1,4 +1,4 @@
-program: Allen_Cahn_HPO.py
+program: ./allen_cahn_train.py
 project: Allen-Cahn-SPINN 
 method: grid   # full factorial
 parameters:
