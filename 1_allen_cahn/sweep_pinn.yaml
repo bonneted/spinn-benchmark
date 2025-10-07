@@ -1,0 +1,16 @@
+program: Allen_Cahn_HPO.py
+project: Allen-Cahn-SPINN 
+method: grid   # full factorial
+parameters:
+  net_type:
+    value: "PINN"
+  n_fourier_features:
+    values: [128, 256]
+  activations:
+    values: ["tanh", "sin"]
+  n_domain:
+    value: 150**2
+  n_iters:
+    values: [20000, 30000]
+  seed:
+    values: [0, 1, 2, 3]   # ensures 4 runs with different initialization

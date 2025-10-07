@@ -13,20 +13,27 @@ import time
 # -----------------------------
 hyperparams = dict(
     fourier_features=True,          # True or False
-    n_fourier_features=256,        # number of fourier features
+    n_fourier_features=128,        # number of fourier features
     sigma=10,                       # stddev of fourier feature kernel
-    net_type="FNN",                 # "FNN" or "SPINN"
+    net_type="SPINN",                 # "PINN" or "SPINN"
     mlp_type="mlp",                 # "mlp" or "modified-mlp"
-    activations="tanh",             # string
+    activations="sin",             # string
     n_hidden=3,
-    rank=32,
+    rank=64,
     num_domain=150**2,
-    n_iters=20000,
-    seed=42                         # for reproducibility / sweep override
+    n_iters=30000,
+    seed=0                         # for reproducibility / sweep override
+    initialization="Glorot normal", # network weight initialization (Glorot normal, Glorot uniform, He normal, He uniform, etc.)
 )
-
-wandb.init(project="Allen-Cahn-SPINN", config=hyperparams)
-config = wandb.config
+wandb_log = False
+if wandb_log:
+    wandb.init(project="Allen-Cahn-SPINN", config=hyperparams)
+    config = wandb.config
+else:
+    class Config:
+        def __init__(self, **entries):
+            self.__dict__.update(entries)
+    config = Config(**hyperparams)
 
 # -----------------------------
 # Set random seed
@@ -47,6 +54,7 @@ sigma = config.sigma
 net_type = config.net_type
 mlp_type = config.mlp_type
 activations = config.activations
+initialization = config.initialization
 n_hidden = config.n_hidden
 rank = config.rank
 n_pde = config.num_domain
@@ -86,7 +94,7 @@ geom = dde.geometry.Interval(-1, 1)
 timedomain = dde.geometry.TimeDomain(0, 1)
 geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 d = 0.001
-if (net_type!="FNN"):
+if (net_type!="PINN"):
 
     x_all = np.linspace(-1, 1, int(np.sqrt(n_pde))).reshape(-1, 1)
     t_all = np.linspace(0, 1, int(np.sqrt(n_pde))).reshape(-1, 1)
@@ -94,7 +102,7 @@ if (net_type!="FNN"):
     geomtime = dde.geometry.ListPointCloud(pde_anchors)
 
 def pde(x, y):
-    if (net_type!="FNN"):
+    if (net_type!="PINN"):
         x = transform_coords(x)
     dy_t = dde.grad.jacobian(y, x, i=0, j=1)
     dy_xx = dde.grad.hessian(y, x, i=0, j=0)
@@ -120,7 +128,7 @@ def pde_spinn(X, y):
     dy_xx = hvp_fwdfwd(lambda x: y[1]((x,t)), (x,), (v_x,))  # ∂²u/∂x²
     return dy_t - d * dy_xx - 5 * (u - u**3)
 
-pde = pde if (net_type=="FNN") else pde_spinn
+pde = pde if (net_type=="PINN") else pde_spinn
 
 # Fourier feature transform
 
@@ -145,21 +153,21 @@ def fourier_features_transform(x, sigma=sigma, num_features=n_fourier_features):
 
 # Hard restraints on initial + boundary conditions
 def output_transform(x, y):
-    if (net_type!="FNN") and isinstance(x, (list,tuple)):
+    if (net_type!="PINN") and isinstance(x, (list,tuple)):
         x = transform_coords(x)
     out = x[:, 0:1]**2 * cos(np.pi * x[:, 0:1]) + x[:, 1:2] * (1 - x[:, 0:1]**2) * y.reshape(-1,1)
     return out
 
-if (net_type=="FNN"):
+if (net_type=="PINN"):
     data = dde.data.TimePDE(geomtime, pde, [], num_domain=n_pde, num_boundary=0, num_initial=0)
 else:
     data = dde.data.PDE(geomtime, pde, [], num_domain=n_pde, num_boundary=0, is_SPINN=True)
 
 if (net_type=="SPINN"):
     layers = [2] + [20] * n_hidden + [rank] + [1]
-    net = dde.nn.SPINN(layers, activations, "Glorot normal", mlp_type)
+    net = dde.nn.SPINN(layers, activations, initialization, mlp_type)
 else:
-    net = dde.nn.FNN([2] + [20] * n_hidden + [1], activations, "Glorot normal")
+    net = dde.nn.FNN([2] + [20] * n_hidden + [1], activations, initialization)
 
 net.apply_output_transform(output_transform)
 if fourier_features:
@@ -200,11 +208,12 @@ print(f"Elapsed training time: {elapsed:.2f} s, {its_per_sec:.2f} it/s")
 # -----------------------------
 # Log to wandb
 # -----------------------------
-wandb.log({
-    "mean_pde_residual": mean_pde_residual,
-    "l2_relative_error": l2_error,
-    "final_loss": float(train_state.loss_train[0]),
-    "elapsed_time_s": elapsed,
-    "iterations_per_sec": its_per_sec,
-})
+if wandb_log:
+    wandb.log({
+        "mean_pde_residual": mean_pde_residual,
+        "l2_relative_error": l2_error,
+        "final_loss": float(train_state.loss_train[0]),
+        "elapsed_time_s": elapsed,
+        "iterations_per_sec": its_per_sec,
+    })
 

@@ -7,12 +7,26 @@ import numpy as np
 from scipy.io import loadmat
 import jax
 import jax.numpy as jnp
+import random
 
 fourier_features = True  # True or False
-net_type="FNN"  # "FNN" or "SPINN"
+net_type="SPINN"  # "FNN" or "SPINN"
 mlp_type = 'mlp'  # 'mlp' or 'modified-mlp', only for SPINN
+n_iters = 30000
+n_domain = 150**2
+n_fourier_features = 128
+rank = 64
+activations = "sin"  # string
+seed = 0 # for reproducibility / sweep override
 # n_adaptive_sample = 10  # number of adaptive samples per iteration, 0 to disable
 
+# -----------------------------
+# Set random seed
+# -----------------------------
+np.random.seed(seed)
+random.seed(seed)
+if dde.backend.backend_name == "jax":
+    key = jax.random.PRNGKey(seed)
 
 @dde.utils.list_handler
 def transform_coords(x):
@@ -49,11 +63,11 @@ geom = dde.geometry.Interval(-1, 1)
 timedomain = dde.geometry.TimeDomain(0, 1)
 geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 d = 0.001
-n_pde = 150**2
+
 if (net_type!="FNN"):
 
-    x_all = np.linspace(-1, 1, int(np.sqrt(n_pde))).reshape(-1, 1)
-    t_all = np.linspace(0, 1, int(np.sqrt(n_pde))).reshape(-1, 1)
+    x_all = np.linspace(-1, 1, int(np.sqrt(n_domain))).reshape(-1, 1)
+    t_all = np.linspace(0, 1, int(np.sqrt(n_domain))).reshape(-1, 1)
     pde_anchors = [x_all, t_all]
     geomtime = dde.geometry.ListPointCloud(pde_anchors)
 
@@ -96,7 +110,7 @@ def list_handler(func):
     return wrapper
 
 @list_handler
-def fourier_features_transform(x, sigma=10, num_features=256):
+def fourier_features_transform(x, sigma=10, num_features=n_fourier_features):
     """Generate Fourier features for input x."""
     kernel = jax.random.normal(
         jax.random.PRNGKey(0), (x.shape[-1], num_features)
@@ -149,13 +163,11 @@ def output_transform(x, y):
     return out
 
 if (net_type=="FNN"):
-    data = dde.data.TimePDE(geomtime, pde, [], num_domain=n_pde, num_boundary=0, num_initial=0)
+    data = dde.data.TimePDE(geomtime, pde, [], num_domain=n_domain, num_boundary=0, num_initial=0)
 else:
-    data = dde.data.PDE(geomtime, pde, [], num_domain=n_pde, num_boundary=0, is_SPINN=True)
+    data = dde.data.PDE(geomtime, pde, [], num_domain=n_domain, num_boundary=0, is_SPINN=True)
 
 n_hidden = 3
-rank = 32
-activations = "tanh" #["sin"]*(n_hidden) + ["sin"] + ["sin"]
 
 if (net_type=="SPINN"):
     layers = [2] + [20] * n_hidden + [rank] + [1]
@@ -172,7 +184,6 @@ model = dde.Model(data, net)
 model.compile("adam", lr=1e-3)
 
 learning_rates = [1e-3, 1e-4, 5e-5, 1e-5, 5e-6]
-n_iters = 20000 #if net_type=="SPINN" else 30000
 for lr in learning_rates:
     # if (n_adaptive_sample>0) and (net_type!="FNN"):
     #     x_sample, y_sample = adaptive_sampling_grid(domain,
